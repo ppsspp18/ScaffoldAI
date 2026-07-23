@@ -8,13 +8,49 @@
   <!-- JSZip for reliable ZIP generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="update_project.css" />
 </head>
 <body>
   <div class="container">
+    <div class="help-popup-overlay" id="helpOverlay"></div>
     <div class="top-nav">
-      <a class="back-link" href="index.html">← Home</a>
-      <span class="mode-badge">📂 Update Your Project</span>
+      <div class="top-nav-left">
+        <button type="button" class="help-icon" id="helpIcon" title="How to use">?</button>
+        <a class="back-link" href="../index.html">← Home</a>
+        <div class="help-popup" id="helpPopup">
+          <div class="help-popup-header">
+            <div class="help-popup-title">
+              <span class="help-popup-icon">💡</span>
+              <span>How to use ScaffoldAI</span>
+            </div>
+            <button type="button" class="help-popup-close" id="closeHelpBtn" aria-label="Close help">&times;</button>
+          </div>
+          <div class="help-popup-body">
+            <ol class="help-steps">
+              <li>
+                <span class="step-num">1</span>
+                <span class="step-text">Click <strong>Load Project from Folder</strong> and pick your project's folder on disk (or load a saved project JSON instead).</span>
+              </li>
+              <li>
+                <span class="step-num">2</span>
+                <span class="step-text">Use <strong>Ask AI About Your Project</strong> below to get AI help with changes, or copy files as plain text.</span>
+              </li>
+              <li>
+                <span class="step-num">3</span>
+                <span class="step-text">Open any file in the workspace to view or edit its content.</span>
+              </li>
+              <li>
+                <span class="step-num">4</span>
+                <span class="step-text">Click <strong>Apply Changes to Folder</strong> to write your edits straight back to disk.</span>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <div class="mode-badge">
+        📂 Update Your Project
+      </div>
+      <div class="top-nav-right"></div>
     </div>
 
     <div class="hero">
@@ -26,7 +62,7 @@
           keep editing, ask AI for changes, and sync everything back to disk.
         </p>
       </div>
-      <div class="badge">Single-file HTML • No backend • Manual LLM workflow</div>
+      <div class="badge">Single-file HTML • No backend • Manual AI workflow</div>
     </div>
 
     <div class="card">
@@ -72,13 +108,7 @@
           </div>
         </div>
 
-        <div class="footer-note">
-          <div><strong>How to use:</strong></div>
-          <div>1. Click <strong>Load Project from Folder</strong> and pick your project's folder on disk (or load a saved project JSON instead).</div>
-          <div>2. Use <strong>Ask AI About Your Project</strong> below to get AI help with changes, or copy files as plain text.</div>
-          <div>3. Open any file in the workspace to view or edit its content.</div>
-          <div>4. Click <strong>Apply Changes to Folder</strong> to write your edits straight back to disk.</div>
-        </div>
+        
       </div>
     </div>
 
@@ -231,7 +261,7 @@
             </div>
 
             <div class="small">
-              Tip: Ask the LLM file-by-file. Example:
+              Tip: Ask AI file-by-file. Example:
               <code>Now generate the content for src/main.py only. Return only code.</code>
             </div>
           </div>
@@ -243,6 +273,6 @@
   </div>
 
   <script src="app.js"></script>
-  <script src="old_project.js"></script>
+  <script src="update_project.js"></script>
 </body>
 </html>

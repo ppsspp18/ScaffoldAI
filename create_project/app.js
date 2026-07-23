@@ -96,9 +96,9 @@ const SAMPLE_JSON = {
 };
 
 // promptBox / copyPromptBtn / jsonInput / buildBtn / loadSampleBtn only
-// exist on new_project.html (Section 1: scaffold prompt + JSON input).
+// exist on create_project.html (Section 1: scaffold prompt + JSON input).
 // They're looked up defensively so this same shared script also runs
-// unmodified on old_project.html, which doesn't have that section.
+// unmodified on update_project.html, which doesn't have that section.
 const promptBox = document.getElementById("promptBox");
 const copyPromptBtn = document.getElementById("copyPromptBtn");
 const jsonInput = document.getElementById("jsonInput");
@@ -195,6 +195,7 @@ async function copyText(text, successMessage="Copied"){
   }
 }
 
+// sync current editor changes to our in-memory file structure
 function syncCurrentEditorToMemory(){
   if(!selectedFilePath) return;
   const textarea = editorContainer.querySelector("textarea");
@@ -310,8 +311,8 @@ function updateStats(files=0, folders=0){
 }
 
 // Resets the "Ask AI About Your Project" UI state. All elements are looked
-// up defensively since new_project.html doesn't include this section at all
-// (it's only present on old_project.html).
+// up defensively since create_project.html doesn't include this section at all
+// (it's only present on update_project.html).
 function resetAskAiUI(){
   if(aiQuestion) aiQuestion.value = "";
   if(aiChangesJsonInput) aiChangesJsonInput.value = "";
@@ -626,9 +627,6 @@ downloadZipBtn.addEventListener("click", downloadProjectZip);
 
 /* ---------------------------------------------------------------------
  * Ask AI About Your Files
- * Build a context-rich prompt (project structure + selected file
- * contents + the user's question), then later apply a structured JSON
- * response (created/edited/deleted files) straight back into the project.
  * ------------------------------------------------------------------- */
 
 function buildStructureText(nodes, indent=""){
@@ -718,12 +716,6 @@ function generateAIPrompt(){
 
 if(generatePromptBtn) generatePromptBtn.addEventListener("click", generateAIPrompt);
 
-/* ---------------------------------------------------------------------
- * Copy Files as Text
- * Copies the raw content of the currently selected/@mentioned files to
- * the clipboard as plain text, with no extra prompt or instructions
- * wrapped around it — just the file(s) themselves.
- * ------------------------------------------------------------------- */
 function buildFilesAsText(){
   if(!projectData){
     showToast("Load a project first");
@@ -978,13 +970,6 @@ if(linkSyncFolderBtn){
   });
 }
 
-/* ---------------------------------------------------------------------
- * Apply Changes to Folder (Project Workspace)
- * Diffs the current in-memory project against the last-synced snapshot
- * and writes only what actually changed — created, edited, or deleted
- * files — straight into the linked PC folder. No full re-export needed.
- * ------------------------------------------------------------------- */
-
 async function pushChangesToFolder(){
   if(!projectData){
     showToast("Build or load a project first");
@@ -1149,19 +1134,12 @@ async function applyAIChanges(){
 
 if(applyChangesBtn) applyChangesBtn.addEventListener("click", applyAIChanges);
 
-/* ---------------------------------------------------------------------
- * Load an existing project straight from a local folder (File System
- * Access API). This walks the real folder/file tree on disk and builds
- * both the scaffold structure and the file contents automatically —
- * no JSON pasting required.
- * ------------------------------------------------------------------- */
-
 const EXCLUDED_DIR_NAMES = new Set([
   ".git", "node_modules", "__pycache__", ".venv", "venv",
   "dist", "build", ".next", ".cache", ".idea", ".vscode"
 ]);
 
-const MAX_IMPORT_FILE_SIZE = 2_000_000; // 2MB, avoid choking on huge/binary files
+const MAX_IMPORT_FILE_SIZE = 2_000_000; // 2MB
 
 let importedFileContents = {};
 
@@ -1192,7 +1170,6 @@ async function traverseDirectoryForImport(dirHandle, basePath=""){
     }
   }
 
-  // Stable ordering: folders first, then files, both alphabetical.
   nodes.sort((a, b) => {
     if(a.type !== b.type) return a.type === "folder" ? -1 : 1;
     return a.name.localeCompare(b.name);
@@ -1250,7 +1227,7 @@ async function importProjectFromFolder(){
 
     showToast(`Loaded "${dirHandle.name}" — ${files} files, ${folders} folders${linkedProjectDirHandle ? " (linked for direct sync)" : ""}`);
   }catch(err){
-    if(err && err.name === "AbortError") return; // user cancelled the picker
+    if(err && err.name === "AbortError") return;
     showToast(err.message || "Failed to load project folder");
   }
 }
@@ -1258,12 +1235,6 @@ async function importProjectFromFolder(){
 if(importFromFolderBtn){
   importFromFolderBtn.addEventListener("click", importProjectFromFolder);
 }
-
-/* ---------------------------------------------------------------------
- * Save directly to a folder on disk (File System Access API).
- * Instead of zipping, this writes the real folder/file tree straight
- * into a directory the user picks from their PC — no download step.
- * ------------------------------------------------------------------- */
 
 async function ensureWritePermission(dirHandle){
   const opts = { mode: "readwrite" };
@@ -1303,8 +1274,6 @@ async function saveProjectToFolder(){
   try{
     let parentHandle = savedDirHandle;
 
-    // Only re-prompt for a directory if we don't already have one linked,
-    // or if we've lost write permission to the previously picked folder.
     if(parentHandle){
       const ok = await ensureWritePermission(parentHandle);
       if(!ok) parentHandle = null;
@@ -1329,10 +1298,7 @@ async function saveProjectToFolder(){
 
     showToast(`Project saved to "${parentHandle.name}/${projectFolderName}"`);
   }catch(err){
-    if(err && err.name === "AbortError"){
-      // User cancelled the folder picker — nothing to report.
-      return;
-    }
+    if(err && err.name === "AbortError") return;
     showToast(err.message || "Failed to save to folder");
   }
 }

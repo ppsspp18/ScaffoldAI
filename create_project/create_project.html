@@ -8,24 +8,64 @@
   <!-- JSZip for reliable ZIP generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="create_project.css" />
 </head>
 <body>
   <div class="container">
+    <div class="help-popup-overlay" id="helpOverlay"></div>
     <div class="top-nav">
-      <a class="back-link" href="index.html">← Home</a>
-      <span class="mode-badge">🆕 Create New Project</span>
+      <div class="top-nav-left">
+        <button type="button" class="help-icon" id="helpIcon" title="How to use">?</button>
+        <a class="back-link" href="../index.html">← Home</a>
+        <div class="help-popup" id="helpPopup">
+          <div class="help-popup-header">
+            <div class="help-popup-title">
+              <span class="help-popup-icon">💡</span>
+              <span>How to use ScaffoldAI</span>
+            </div>
+            <button type="button" class="help-popup-close" id="closeHelpBtn" aria-label="Close help">&times;</button>
+          </div>
+          <div class="help-popup-body">
+            <ol class="help-steps">
+              <li>
+                <span class="step-num">1</span>
+                <span class="step-text">Ask AI to write complete project code.</span>
+              </li>
+              <li>
+                <span class="step-num">2</span>
+                <span class="step-text">Ask AI again using the scaffold prompt to return only the file/folder JSON.</span>
+              </li>
+              <li>
+                <span class="step-num">3</span>
+                <span class="step-text">Paste the JSON here and click <strong>Build Scaffold</strong>.</span>
+              </li>
+              <li>
+                <span class="step-num">4</span>
+                <span class="step-text">Open each file and paste the code manually.</span>
+              </li>
+              <li>
+                <span class="step-num">5</span>
+                <span class="step-text">Save the project straight to a folder on your PC, or export it as JSON/ZIP.</span>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <div class="mode-badge">
+        🆕 Create New Project
+      </div>
+      <div class="top-nav-right"></div>
     </div>
 
     <div class="hero">
       <div class="title-wrap">
         <h1>ScaffoldAI</h1>
         <p>
-          Generate a project scaffold from any LLM response. Copy the scaffold prompt, paste the JSON structure,
+          Generate a project scaffold from any AI response. Copy the scaffold prompt, paste the JSON structure,
           create all file editors automatically, then manually paste code into each file and export the final project.
         </p>
       </div>
-      <div class="badge">Single-file HTML • No backend • Manual LLM workflow</div>
+      <div class="badge">Single-file HTML • No backend • Manual AI workflow</div>
     </div>
 
     <div class="grid">
@@ -89,14 +129,7 @@ Example:
             </div>
           </div>
 
-          <div class="footer-note">
-            <div><strong>How to use:</strong></div>
-            <div>1. Ask the LLM for project code.</div>
-            <div>2. Ask the LLM again using the scaffold prompt to return only the file/folder JSON.</div>
-            <div>3. Paste the JSON here and click <strong>Build Scaffold</strong>.</div>
-            <div>4. Open each file and paste the code manually.</div>
-            <div>5. Save the project straight to a folder on your PC, or export it as JSON/ZIP.</div>
-          </div>
+          
         </div>
       </div>
 
@@ -117,7 +150,7 @@ Example:
           <div class="small" style="margin-bottom:10px">
             Once you've built your scaffold and pasted in the code, use <strong>Save to Folder</strong> to write
             the project straight to disk, or export it as JSON/ZIP. Head over to
-            <strong><a href="old_project.html" style="color:#7dd3fc">Update Your Project</a></strong> afterwards
+            <strong><a href="../update_project/update_project.html" style="color:#7dd3fc">Update Your Project</a></strong> afterwards
             to keep editing it with AI help.
           </div>
           <div id="workspaceEmpty" class="empty-state">
@@ -166,7 +199,7 @@ Example:
               </div>
 
               <div class="small">
-                Tip: Ask the LLM file-by-file. Example:
+                Tip: Ask AI file-by-file. Example:
                 <code>Now generate the content for src/main.py only. Return only code.</code>
               </div>
             </div>
@@ -179,6 +212,6 @@ Example:
   </div>
 
   <script src="app.js"></script>
-  <script src="new_project.js"></script>
+  <script src="create_project.js"></script>
 </body>
 </html>
