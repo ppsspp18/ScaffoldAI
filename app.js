@@ -95,6 +95,10 @@ const SAMPLE_JSON = {
   ]
 };
 
+// promptBox / copyPromptBtn / jsonInput / buildBtn / loadSampleBtn only
+// exist on new_project.html (Section 1: scaffold prompt + JSON input).
+// They're looked up defensively so this same shared script also runs
+// unmodified on old_project.html, which doesn't have that section.
 const promptBox = document.getElementById("promptBox");
 const copyPromptBtn = document.getElementById("copyPromptBtn");
 const jsonInput = document.getElementById("jsonInput");
@@ -129,6 +133,7 @@ const fileSelectList = document.getElementById("fileSelectList");
 const aiQuestion = document.getElementById("aiQuestion");
 const generatePromptBtn = document.getElementById("generatePromptBtn");
 const copyGeneratedPromptBtn = document.getElementById("copyGeneratedPromptBtn");
+const copyFilesAsTextBtn = document.getElementById("copyFilesAsTextBtn");
 const generatedPromptBox = document.getElementById("generatedPromptBox");
 const syncPromptBox = document.getElementById("syncPromptBox");
 const copySyncPromptBtn = document.getElementById("copySyncPromptBtn");
@@ -158,7 +163,7 @@ let savedDirHandle = null;
 
 const supportsFileSystemAccess = "showDirectoryPicker" in window;
 
-promptBox.textContent = SCAFFOLD_PROMPT;
+if(promptBox) promptBox.textContent = SCAFFOLD_PROMPT;
 if(syncPromptBox) syncPromptBox.textContent = SYNC_PROMPT;
 
 if(!supportsFileSystemAccess && saveToFolderBtn){
@@ -198,16 +203,16 @@ function syncCurrentEditorToMemory(){
   }
 }
 
-copyPromptBtn.addEventListener("click", () => {
+if(copyPromptBtn) copyPromptBtn.addEventListener("click", () => {
   copyText(SCAFFOLD_PROMPT, "Scaffold prompt copied");
 });
 
-loadSampleBtn.addEventListener("click", () => {
+if(loadSampleBtn) loadSampleBtn.addEventListener("click", () => {
   jsonInput.value = JSON.stringify(SAMPLE_JSON, null, 2);
   showToast("Sample JSON loaded");
 });
 
-resetBtn.addEventListener("click", () => {
+if(resetBtn) resetBtn.addEventListener("click", () => {
   if(!confirm("Reset ScaffoldAI and clear the current scaffold + file contents?")) return;
   projectData = null;
   fileContents = {};
@@ -218,7 +223,7 @@ resetBtn.addEventListener("click", () => {
   linkedProjectDirHandle = null;
   updateSyncFolderStatusPill();
   lastSyncedSnapshot = null;
-  jsonInput.value = "";
+  if(jsonInput) jsonInput.value = "";
   treeRoot.innerHTML = "";
   editorContainer.innerHTML = `
     <div class="empty-state" style="min-height:520px">
@@ -230,13 +235,7 @@ resetBtn.addEventListener("click", () => {
   workspaceEmpty.classList.remove("hidden");
   updateStats();
 
-  aiQuestion.value = "";
-  aiChangesJsonInput.value = "";
-  pendingChanges = [];
-  changeListItems.innerHTML = "";
-  changeListContainer.classList.add("hidden");
-  generatedPrompt = "";
-  generatedPromptBox.textContent = 'Select files, type your message, and click "Generate AI Prompt".';
+  resetAskAiUI();
   renderFileSelectList();
 
   showToast("Scaffold reset");
@@ -308,6 +307,19 @@ function updateStats(files=0, folders=0){
   statProject.textContent = projectData?.projectName || "—";
   statFiles.textContent = files;
   statFolders.textContent = folders;
+}
+
+// Resets the "Ask AI About Your Project" UI state. All elements are looked
+// up defensively since new_project.html doesn't include this section at all
+// (it's only present on old_project.html).
+function resetAskAiUI(){
+  if(aiQuestion) aiQuestion.value = "";
+  if(aiChangesJsonInput) aiChangesJsonInput.value = "";
+  pendingChanges = [];
+  if(changeListItems) changeListItems.innerHTML = "";
+  if(changeListContainer) changeListContainer.classList.add("hidden");
+  generatedPrompt = "";
+  if(generatedPromptBox) generatedPromptBox.textContent = 'Select files, type your message, and click "Generate AI Prompt".';
 }
 
 function updateFolderStatusPill(){
@@ -414,7 +426,7 @@ function openFile(path){
   refreshTreeActiveState();
 }
 
-buildBtn.addEventListener("click", () => {
+if(buildBtn) buildBtn.addEventListener("click", () => {
   const raw = jsonInput.value.trim();
   if(!raw){
     showToast("Paste JSON first");
@@ -446,13 +458,7 @@ buildBtn.addEventListener("click", () => {
 
     updateStats(files, folders);
     renderFileSelectList();
-    aiQuestion.value = "";
-    aiChangesJsonInput.value = "";
-    pendingChanges = [];
-    changeListItems.innerHTML = "";
-    changeListContainer.classList.add("hidden");
-    generatedPrompt = "";
-    generatedPromptBox.textContent = 'Select files, type your message, and click "Generate AI Prompt".';
+    resetAskAiUI();
     lastSyncedSnapshot = null;
     showToast("Scaffold built successfully");
   }catch(err){
@@ -550,13 +556,7 @@ projectLoader.addEventListener("change", async (e) => {
 
     updateStats(files, folders);
     renderFileSelectList();
-    aiQuestion.value = "";
-    aiChangesJsonInput.value = "";
-    pendingChanges = [];
-    changeListItems.innerHTML = "";
-    changeListContainer.classList.add("hidden");
-    generatedPrompt = "";
-    generatedPromptBox.textContent = 'Select files, type your message, and click "Generate AI Prompt".';
+    resetAskAiUI();
     lastSyncedSnapshot = null;
     showToast("Saved project loaded");
   }catch(err){
@@ -704,9 +704,11 @@ function generateAIPrompt(){
 
   prompt += `My request:\n${question}\n\n`;
   prompt += `Instructions for you (the AI):\n`;
-  prompt += `- Write the COMPLETE code for any file you modify or create — no partial snippets, no "// unchanged" placeholders.\n`;
-  prompt += `- If you create a new file, give its full relative path (matching the structure above) and complete content.\n`;
-  prompt += `- Keep unrelated parts of each file intact.\n`;
+  prompt += `- For every file you touch, write out the COMPLETE, full file content — never a diff, patch, snippet, or a description of what to change.\n`;
+  prompt += `- Do NOT suggest how to edit the code (e.g. "change line 12 to...", "add this inside the function...") — instead, output the entire file exactly as it should look afterward.\n`;
+  prompt += `- This applies equally to files you are editing and files you are creating for the first time: always give the full content, never partial code or "// unchanged" / "// rest stays the same" placeholders.\n`;
+  prompt += `- If you create a new file, give its full relative path (matching the structure above) and its complete content.\n`;
+  prompt += `- Keep unrelated parts of each file intact in the full content you output.\n`;
   prompt += `- For now, just answer normally with explanation and code. I will separately ask you to reformat your changes as JSON.`;
 
   generatedPrompt = prompt;
@@ -715,6 +717,47 @@ function generateAIPrompt(){
 }
 
 if(generatePromptBtn) generatePromptBtn.addEventListener("click", generateAIPrompt);
+
+/* ---------------------------------------------------------------------
+ * Copy Files as Text
+ * Copies the raw content of the currently selected/@mentioned files to
+ * the clipboard as plain text, with no extra prompt or instructions
+ * wrapped around it — just the file(s) themselves.
+ * ------------------------------------------------------------------- */
+function buildFilesAsText(){
+  if(!projectData){
+    showToast("Load a project first");
+    return "";
+  }
+
+  syncCurrentEditorToMemory();
+
+  const manualSelected = fileSelectList
+    ? Array.from(fileSelectList.querySelectorAll(".file-select-checkbox:checked")).map(cb => cb.dataset.path)
+    : [];
+  const mentioned = aiQuestion ? Array.from(detectMentionedFiles(aiQuestion.value)) : [];
+  const allSelected = Array.from(new Set([...manualSelected, ...mentioned]));
+
+  if(!allSelected.length){
+    showToast("Select at least one file first");
+    return "";
+  }
+
+  let text = "";
+  allSelected.forEach(path => {
+    text += `--- FILE: ${path} ---\n${fileContents[path] || "(empty file)"}\n--- END FILE ---\n\n`;
+  });
+
+  return text.trim();
+}
+
+if(copyFilesAsTextBtn){
+  copyFilesAsTextBtn.addEventListener("click", () => {
+    const text = buildFilesAsText();
+    if(!text) return;
+    copyText(text, "Files copied as text");
+  });
+}
 
 if(copyGeneratedPromptBtn){
   copyGeneratedPromptBtn.addEventListener("click", () => {
@@ -1203,13 +1246,7 @@ async function importProjectFromFolder(){
 
     updateStats(files, folders);
     renderFileSelectList();
-    aiQuestion.value = "";
-    aiChangesJsonInput.value = "";
-    pendingChanges = [];
-    changeListItems.innerHTML = "";
-    changeListContainer.classList.add("hidden");
-    generatedPrompt = "";
-    generatedPromptBox.textContent = 'Select files, type your message, and click "Generate AI Prompt".';
+    resetAskAiUI();
 
     showToast(`Loaded "${dirHandle.name}" — ${files} files, ${folders} folders${linkedProjectDirHandle ? " (linked for direct sync)" : ""}`);
   }catch(err){

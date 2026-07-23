@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScaffoldAI — Update Your Project</title>
+
+  <!-- JSZip for reliable ZIP generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="top-nav">
+      <a class="back-link" href="index.html">← Home</a>
+      <span class="mode-badge">📂 Update Your Project</span>
+    </div>
+
+    <div class="hero">
+      <div class="title-wrap">
+        <h1>ScaffoldAI</h1>
+        <p>
+          Load an existing project straight from your PC, or restore a previously saved ScaffoldAI project JSON.
+          ScaffoldAI will rebuild the full folder/file tree with every file's code already filled in, so you can
+          keep editing, ask AI for changes, and sync everything back to disk.
+        </p>
+      </div>
+      <div class="badge">Single-file HTML • No backend • Manual LLM workflow</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>1) Load Your Project</h2>
+        <div class="pill">Folder / JSON → Editors → Export</div>
+      </div>
+      <div class="card-body">
+        <p class="muted">
+          Choose how you'd like to bring your existing project into ScaffoldAI.
+        </p>
+
+        <div class="load-options">
+          <div class="load-option-btn" id="importFromFolderBtn">
+            <span class="lo-icon">📥</span>
+            <span>Load Project from Folder</span>
+            <span class="lo-sub">Reads a real folder on your PC and fills in every file's code automatically.</span>
+          </div>
+          <div class="load-option-btn" id="loadProjectBtn">
+            <span class="lo-icon">📂</span>
+            <span>Load Saved Project JSON</span>
+            <span class="lo-sub">Restore a project you previously exported from ScaffoldAI as JSON.</span>
+          </div>
+        </div>
+        <input id="projectLoader" type="file" accept=".json" class="hidden" />
+
+        <div class="btn-row">
+          <button class="btn-danger" id="resetBtn">🗑 Reset All</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Project</div>
+            <div class="value" id="statProject">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Files</div>
+            <div class="value" id="statFiles">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Folders</div>
+            <div class="value" id="statFolders">0</div>
+          </div>
+        </div>
+
+        <div class="footer-note">
+          <div><strong>How to use:</strong></div>
+          <div>1. Click <strong>Load Project from Folder</strong> and pick your project's folder on disk (or load a saved project JSON instead).</div>
+          <div>2. Use <strong>Ask AI About Your Project</strong> below to get AI help with changes, or copy files as plain text.</div>
+          <div>3. Open any file in the workspace to view or edit its content.</div>
+          <div>4. Click <strong>Apply Changes to Folder</strong> to write your edits straight back to disk.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-header">
+        <h2>2) Ask AI About Your Project</h2>
+        <div class="pill">Select files → Ask → Copy → Apply JSON</div>
+      </div>
+      <div class="card-body">
+        <p class="muted">
+          Tick the files you want the AI to see (or just mention them as <code>@filename</code> in your message
+          and they'll be picked up automatically), describe what you want, then copy the generated prompt into
+          ChatGPT / Claude / Gemini. Once you're happy with its answer, send it the Sync Prompt below so it returns
+          a structured JSON of every file it changed — paste that back here and ScaffoldAI will update your project.
+        </p>
+
+        <div class="field">
+          <label>Select files to attach as context</label>
+          <div id="fileSelectList" class="file-select-list">
+            <div class="small">Load a project first to select files.</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="aiQuestion">Your message to the AI</label>
+          <textarea id="aiQuestion" rows="4" placeholder="e.g. Please check the error message in @app.js and fix it."></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-success" id="generatePromptBtn">🧠 Generate AI Prompt</button>
+          <button class="btn-dark" id="copyGeneratedPromptBtn">📋 Copy Prompt</button>
+          <button class="btn-dark" id="copyFilesAsTextBtn">📄 Copy Files as Text</button>
+        </div>
+        <div class="small" style="margin-top:8px">
+          <strong>Copy Files as Text</strong> copies just the selected/@mentioned file(s) as plain text —
+          no question, no instructions, nothing else added.
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <label>Generated Prompt Preview</label>
+          <div id="generatedPromptBox" class="prompt-box">Select files, type your message, and click "Generate AI Prompt".</div>
+        </div>
+
+        <div class="field" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <label>Step 2 — Sync Prompt (send this after the AI has answered)</label>
+          <div class="small" style="margin-bottom:8px">
+            After you're happy with the AI's reply in your chat, send it this follow-up so it returns every file it
+            created, edited, or deleted as structured JSON.
+          </div>
+          <div id="syncPromptBox" class="prompt-box"></div>
+          <div class="btn-row">
+            <button class="btn-primary" id="copySyncPromptBtn">📋 Copy Sync Prompt</button>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <label for="aiChangesJsonInput">Step 3 — Paste the AI's change list (paths only, no code yet)</label>
+          <div class="small" style="margin-bottom:8px">
+            This JSON only says which files were created, edited, or deleted — no code in it. Load it, then paste
+            each file's code manually into the boxes that appear below.
+          </div>
+          <textarea id="aiChangesJsonInput" rows="8" placeholder='Paste the JSON change list here...'></textarea>
+          <div class="btn-row">
+            <button class="btn-dark" id="loadChangeListBtn">📝 Load Change List</button>
+          </div>
+        </div>
+
+        <div id="changeListContainer" class="field hidden" style="margin-top:16px">
+          <label>Step 4 — Paste the code for each file</label>
+          <div id="changeListItems" class="change-list"></div>
+        </div>
+
+        <div class="field" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <div class="toolbar" style="margin-bottom:10px">
+            <span id="syncFolderStatusPill" class="folder-pill hidden"></span>
+            <button class="btn-dark" id="linkSyncFolderBtn">🔗 Link PC Folder for Direct Sync</button>
+          </div>
+          <div class="small" style="margin-bottom:10px">
+            If you link the project's folder on your PC (or loaded it earlier via "Load Project from Folder"),
+            applying changes writes them straight to those files on disk — created, edited, and deleted — no need
+            to download the whole project again.
+          </div>
+          <div class="btn-row">
+            <button class="btn-success" id="applyChangesBtn">✅ Apply Changes to Project</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-header">
+        <h2>3) Project Workspace</h2>
+        <div class="toolbar">
+          <span id="folderStatusPill" class="folder-pill hidden"></span>
+          <button class="btn-dark" id="saveProjectBtn">💾 Export Project JSON</button>
+          <button class="btn-warning" id="downloadZipBtn">🧷 Download ZIP</button>
+          <button class="btn-success" id="saveToFolderBtn">📁 Save to Folder</button>
+          <button class="btn-primary" id="pushChangesBtn">🔄 Apply Changes to Folder</button>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="small" style="margin-bottom:10px">
+          <strong>Apply Changes to Folder</strong> writes back only the files you've created, edited, or
+          deleted since the last sync — no full re-download needed.
+        </div>
+        <div id="workspaceEmpty" class="empty-state">
+          <div>
+            <h3 style="margin-top:0;color:#e5e7eb">No project loaded yet</h3>
+            <div>
+              Use <strong>Load Project from Folder</strong> or <strong>Load Saved Project JSON</strong> above.
+              ScaffoldAI will create the full project tree and an editor for every file.
+            </div>
+          </div>
+        </div>
+
+        <div id="workspace" class="workspace hidden">
+          <div class="tree-panel">
+            <h3 class="section-title">Project Tree</h3>
+            <div class="small" style="margin-bottom:10px">
+              Click any file to open its editor.
+            </div>
+
+            <div class="search-box">
+              <input id="fileSearch" type="text" placeholder="Search file path..." />
+              <button class="btn-dark" id="clearSearchBtn">Clear</button>
+            </div>
+
+            <div class="tree-wrap" style="margin-top:14px">
+              <ul id="treeRoot" class="tree"></ul>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="editor-top">
+              <div>
+                <div class="small">Selected file</div>
+                <div id="editorFile" class="editor-file">No file selected</div>
+              </div>
+              <div class="editor-actions">
+                <button class="btn-dark" id="copyFileContentBtn">📋 Copy File Content</button>
+                <button class="btn-dark" id="clearFileBtn">🧹 Clear File</button>
+              </div>
+            </div>
+
+            <div class="editor-box" id="editorContainer">
+              <div class="empty-state" style="min-height:520px">
+                Select a file from the tree to view or edit its content.
+              </div>
+            </div>
+
+            <div class="small">
+              Tip: Ask the LLM file-by-file. Example:
+              <code>Now generate the content for src/main.py only. Return only code.</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="old_project.js"></script>
+</body>
+</html>
