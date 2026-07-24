@@ -152,8 +152,26 @@ const linkSyncFolderBtn = document.getElementById("linkSyncFolderBtn");
 const syncFolderStatusPill = document.getElementById("syncFolderStatusPill");
 const applyChangesBtn = document.getElementById("applyChangesBtn");
 
+// To-Do Plan controls — only present on todo_project.html. Looked up
+// defensively (same pattern as everything else in this file) so this
+// shared script still runs unmodified on create_project.html / update_project.html.
+const planTaskInput = document.getElementById("planTaskInput");
+const generatePlanPromptBtn = document.getElementById("generatePlanPromptBtn");
+const copyPlanPromptBtn = document.getElementById("copyPlanPromptBtn");
+const planPromptBox = document.getElementById("planPromptBox");
+const planJsonInput = document.getElementById("planJsonInput");
+const loadPlanBtn = document.getElementById("loadPlanBtn");
+const planContainer = document.getElementById("planContainer");
+const planStepsList = document.getElementById("planStepsList");
+const planProgressText = document.getElementById("planProgressText");
+const planProgressBarFill = document.getElementById("planProgressBarFill");
+const resetPlanBtn = document.getElementById("resetPlanBtn");
+
 let generatedPrompt = "";
 let pendingChanges = [];
+let planData = null; // { planTitle, steps: [{ id, title, description, files }] }
+let planGeneratedPrompt = "";
+let completedStepIds = new Set();
 let linkedProjectDirHandle = null;
 let lastSyncedSnapshot = null; // { path: content } as of the last successful disk sync
 
@@ -244,6 +262,7 @@ if(resetBtn) resetBtn.addEventListener("click", () => {
   updateStats();
 
   resetAskAiUI();
+  resetPlanUI();
   renderFileSelectList();
 
   showToast("Scaffold reset");
@@ -328,6 +347,21 @@ function resetAskAiUI(){
   if(changeListContainer) changeListContainer.classList.add("hidden");
   generatedPrompt = "";
   if(generatedPromptBox) generatedPromptBox.textContent = 'Select files, type your message, and click "Generate AI Prompt".';
+}
+
+// Resets the "To-Do Plan" UI state. All elements are looked up defensively
+// since only todo_project.html includes this section.
+function resetPlanUI(){
+  planData = null;
+  completedStepIds = new Set();
+  planGeneratedPrompt = "";
+  if(planTaskInput) planTaskInput.value = "";
+  if(planJsonInput) planJsonInput.value = "";
+  if(planPromptBox) planPromptBox.textContent = 'Describe your task and click "Generate Plan Prompt".';
+  if(planStepsList) planStepsList.innerHTML = "";
+  if(planContainer) planContainer.classList.add("hidden");
+  if(planProgressText) planProgressText.textContent = "0 / 0 steps completed";
+  if(planProgressBarFill) planProgressBarFill.style.width = "0%";
 }
 
 function updateFolderStatusPill(){
@@ -481,6 +515,7 @@ if(buildBtn) buildBtn.addEventListener("click", () => {
     updateStats(files, folders);
     renderFileSelectList();
     resetAskAiUI();
+    resetPlanUI();
     lastSyncedSnapshot = null;
     showToast("Scaffold built successfully");
   }catch(err){
@@ -579,6 +614,7 @@ projectLoader.addEventListener("change", async (e) => {
     updateStats(files, folders);
     renderFileSelectList();
     resetAskAiUI();
+    resetPlanUI();
     lastSyncedSnapshot = null;
     showToast("Saved project loaded");
   }catch(err){
@@ -785,6 +821,285 @@ if(copyGeneratedPromptBtn){
 if(copySyncPromptBtn){
   copySyncPromptBtn.addEventListener("click", () => {
     copyText(SYNC_PROMPT, "Sync prompt copied");
+  });
+}
+
+/* ---------------------------------------------------------------------
+ * To-Do Plan (Update Your Project — To-Do List Plan page only)
+ * ------------------------------------------------------------------- */
+
+// Builds the prompt that asks the AI to break a large task down into an
+// ordered, JSON-structured to-do list instead of writing code right away.
+function buildPlanPrompt(task){
+  let prompt = `I'm working on a project called "${projectData.projectName}".\n\n`;
+  prompt += `Project structure:\n${buildStructureText(projectData.structure)}\n`;
+  prompt += `My task (this may require changes across many files, more than you can safely write in a single response):\n${task}\n\n`;
+  prompt += `Instructions for you (the AI):\n`;
+  prompt += `- Do NOT write any code yet.\n`;
+  prompt += `- Break this task down into a clear, ordered, numbered to-do list / implementation plan, where each step is a small, self-contained unit of work touching a specific, limited set of files.\n`;
+  prompt += `- Each step must be small enough to be fully implemented in a single AI response.\n`;
+  prompt += `- Order the steps so later steps can safely rely on earlier ones already being done (e.g. create data models before the UI that consumes them).\n`;
+  prompt += `- For each step, list the exact relative file path(s) (matching the project structure above) it will create or edit.\n`;
+  prompt += `- Give each step a description detailed enough that it can be handed to a different AI conversation, with no other context, and still be implemented correctly.\n`;
+  prompt += `- Return ONLY valid JSON. No markdown, no explanations, no triple backticks, no comments.\n`;
+  prompt += `- Use exactly this schema:\n\n`;
+  prompt += JSON.stringify({
+    planTitle: "short title for the overall task",
+    steps: [
+      {
+        id: 1,
+        title: "short step title",
+        description: "what to do in this step and why, in enough detail to act on it alone",
+        files: ["relative/path/one.ext", "relative/path/two.ext"]
+      }
+    ]
+  }, null, 2);
+  prompt += `\n\nRules:\n`;
+  prompt += `- "id" must be a sequential integer starting at 1, one per step, in execution order.\n`;
+  prompt += `- "files" must use forward-slash relative paths matching the project structure above (existing files, or clearly new files this step introduces).\n`;
+  prompt += `- Output only the JSON object described above — nothing else.`;
+  return prompt;
+}
+
+function generatePlanPromptFlow(){
+  if(!projectData){
+    showToast("Load a project first");
+    return;
+  }
+  syncCurrentEditorToMemory();
+  const task = planTaskInput.value.trim();
+  if(!task){
+    showToast("Describe the task first");
+    return;
+  }
+  planGeneratedPrompt = buildPlanPrompt(task);
+  planPromptBox.textContent = planGeneratedPrompt;
+  showToast("Plan prompt generated — paste it into your AI chat");
+}
+
+if(generatePlanPromptBtn) generatePlanPromptBtn.addEventListener("click", generatePlanPromptFlow);
+
+if(copyPlanPromptBtn){
+  copyPlanPromptBtn.addEventListener("click", () => {
+    if(!planGeneratedPrompt){
+      showToast("Generate the plan prompt first");
+      return;
+    }
+    copyText(planGeneratedPrompt, "Plan prompt copied");
+  });
+}
+
+function validatePlanData(data){
+  if(!data || typeof data !== "object"){
+    throw new Error("Invalid plan JSON");
+  }
+  if(!data.planTitle || typeof data.planTitle !== "string"){
+    throw new Error('"planTitle" is required');
+  }
+  if(!Array.isArray(data.steps) || !data.steps.length){
+    throw new Error('"steps" must be a non-empty array');
+  }
+  data.steps.forEach((step, idx) => {
+    if(!step || typeof step !== "object"){
+      throw new Error(`Invalid step at index ${idx}`);
+    }
+    if(typeof step.id !== "number"){
+      throw new Error(`Step at index ${idx} is missing a numeric "id"`);
+    }
+    if(!step.title || typeof step.title !== "string"){
+      throw new Error(`Step ${step.id} is missing a "title"`);
+    }
+    if(!step.description || typeof step.description !== "string"){
+      throw new Error(`Step ${step.id} is missing a "description"`);
+    }
+    if(!Array.isArray(step.files)){
+      throw new Error(`Step ${step.id} is missing a "files" array`);
+    }
+  });
+}
+
+function loadPlanFlow(){
+  if(!projectData){
+    showToast("Load a project first");
+    return;
+  }
+
+  const raw = planJsonInput.value.trim();
+  if(!raw){
+    showToast("Paste the AI's plan JSON first");
+    return;
+  }
+
+  let data;
+  try{
+    data = JSON.parse(raw);
+  }catch{
+    showToast("Invalid JSON — check the pasted plan");
+    return;
+  }
+
+  try{
+    validatePlanData(data);
+  }catch(err){
+    showToast(err.message || "Invalid plan JSON");
+    return;
+  }
+
+  planData = data;
+  completedStepIds = new Set();
+  renderPlan();
+  planContainer.classList.remove("hidden");
+  showToast(`Loaded plan "${data.planTitle}" with ${data.steps.length} step(s)`);
+}
+
+if(loadPlanBtn) loadPlanBtn.addEventListener("click", loadPlanFlow);
+
+function updatePlanProgress(){
+  if(!planData || !planProgressText) return;
+  const total = planData.steps.length;
+  const done = completedStepIds.size;
+  planProgressText.textContent = `${done} / ${total} steps completed`;
+  if(planProgressBarFill){
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    planProgressBarFill.style.width = `${pct}%`;
+  }
+}
+
+function renderPlan(){
+  if(!planData || !planStepsList) return;
+  planStepsList.innerHTML = "";
+
+  planData.steps.forEach(step => {
+    const item = document.createElement("div");
+    item.className = "plan-step-item";
+    if(completedStepIds.has(step.id)) item.classList.add("done");
+
+    const header = document.createElement("div");
+    header.className = "plan-step-header";
+
+    const cbLabel = document.createElement("label");
+    cbLabel.className = "plan-step-check-label";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = completedStepIds.has(step.id);
+    cb.addEventListener("change", () => {
+      if(cb.checked) completedStepIds.add(step.id);
+      else completedStepIds.delete(step.id);
+      item.classList.toggle("done", cb.checked);
+      updatePlanProgress();
+    });
+
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "plan-step-title";
+    titleSpan.textContent = `Step ${step.id}: ${step.title}`;
+
+    cbLabel.append(cb, titleSpan);
+    header.appendChild(cbLabel);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "btn-primary plan-step-copy-btn";
+    copyBtn.textContent = "📋 Copy Step Prompt";
+    copyBtn.addEventListener("click", () => copyStepPrompt(step));
+    header.appendChild(copyBtn);
+
+    item.appendChild(header);
+
+    const desc = document.createElement("div");
+    desc.className = "small plan-step-desc";
+    desc.textContent = step.description;
+    item.appendChild(desc);
+
+    if(step.files && step.files.length){
+      const filesRow = document.createElement("div");
+      filesRow.className = "plan-step-files";
+      step.files.forEach(f => {
+        const chip = document.createElement("span");
+        chip.className = "plan-file-chip";
+        chip.textContent = f;
+        filesRow.appendChild(chip);
+      });
+      item.appendChild(filesRow);
+    }
+
+    planStepsList.appendChild(item);
+  });
+
+  updatePlanProgress();
+}
+
+// Builds a complete, standalone prompt for a single plan step: the overall
+// plan for context, which steps are already done, the project structure,
+// this step's instructions, and the *current* (live) content of every file
+// this step touches — which automatically includes any edits made while
+// completing earlier steps, since fileContents is always kept up to date.
+function buildStepPrompt(step){
+  syncCurrentEditorToMemory();
+
+  let prompt = `I'm working on a project called "${projectData.projectName}".\n\n`;
+  prompt += `We previously broke a larger task down into a step-by-step plan titled "${planData.planTitle}". You are only implementing ONE step of that plan in this response — do not attempt the other steps.\n\n`;
+
+  prompt += `Full plan for context:\n`;
+  planData.steps.forEach(s => {
+    const status = s.id === step.id
+      ? "[THIS STEP — implement this one now]"
+      : (completedStepIds.has(s.id) ? "[DONE]" : "[NOT DONE YET]");
+    prompt += `${s.id}. ${status} ${s.title} — ${s.description}\n`;
+  });
+  prompt += `\n`;
+
+  const doneSteps = planData.steps.filter(s => completedStepIds.has(s.id) && s.id !== step.id);
+  if(doneSteps.length){
+    prompt += `Steps already completed so far (assume their changes are already in the codebase):\n`;
+    doneSteps.forEach(s => {
+      prompt += `- Step ${s.id} (${s.title}): ${s.description}\n`;
+    });
+    prompt += `\n`;
+  }
+
+  prompt += `Project structure:\n${buildStructureText(projectData.structure)}\n`;
+
+  prompt += `Your task right now — Step ${step.id}: ${step.title}\n${step.description}\n\n`;
+
+  const relevantFiles = Array.from(new Set(step.files || []));
+  if(relevantFiles.length){
+    prompt += `Below are the current contents of the file(s) relevant to this step (including any updates made while completing earlier steps):\n\n`;
+    relevantFiles.forEach(path => {
+      const exists = Object.prototype.hasOwnProperty.call(fileContents, path);
+      const body = exists ? (fileContents[path] || "(empty file)") : "(this file does not exist yet — you are creating it)";
+      prompt += `--- FILE: ${path} ---\n${body}\n--- END FILE ---\n\n`;
+    });
+  }else{
+    prompt += `(No specific files were listed for this step — only the structure above.)\n\n`;
+  }
+
+  prompt += `Instructions for you (the AI):\n`;
+  prompt += `- Only implement Step ${step.id}. Do not implement any other step.\n`;
+  prompt += `- For every file you touch, write out the COMPLETE, full file content — never a diff, patch, snippet, or a description of what to change.\n`;
+  prompt += `- Do NOT suggest how to edit the code (e.g. "change line 12 to...", "add this inside the function...") — instead, output the entire file exactly as it should look afterward.\n`;
+  prompt += `- This applies equally to files you are editing and files you are creating for the first time: always give the full content, never partial code or "// unchanged" / "// rest stays the same" placeholders.\n`;
+  prompt += `- If this step genuinely requires touching a file not listed above, that's fine — just call it out clearly and give its full relative path and complete content.\n`;
+  prompt += `- Keep unrelated parts of each file intact in the full content you output.\n`;
+  prompt += `- For now, just answer normally with explanation and code. I will separately ask you to reformat your changes as JSON using the usual sync prompt.`;
+
+  return prompt;
+}
+
+function copyStepPrompt(step){
+  if(!projectData){
+    showToast("Load a project first");
+    return;
+  }
+  const prompt = buildStepPrompt(step);
+  copyText(prompt, `Prompt for Step ${step.id} copied`);
+}
+
+if(resetPlanBtn){
+  resetPlanBtn.addEventListener("click", () => {
+    if(!confirm("Clear the current to-do plan and progress? This cannot be undone.")) return;
+    resetPlanUI();
+    showToast("Plan cleared");
   });
 }
 
@@ -1434,6 +1749,7 @@ async function importProjectFromFolder(){
     updateStats(files, folders);
     renderFileSelectList();
     resetAskAiUI();
+    resetPlanUI();
 
     showToast(`Loaded "${dirHandle.name}" — ${files} files, ${folders} folders${linkedProjectDirHandle ? " (linked for direct sync)" : ""}`);
   }catch(err){

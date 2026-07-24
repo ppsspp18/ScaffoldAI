@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScaffoldAI — Update Your Project (To-Do Plan)</title>
+
+  <!-- JSZip for reliable ZIP generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <link rel="stylesheet" href="todo_project.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="help-popup-overlay" id="helpOverlay"></div>
+    <div class="top-nav">
+      <div class="top-nav-left">
+        <button type="button" class="help-icon" id="helpIcon" title="How to use">?</button>
+        <a class="back-link" href="../index.html">← Home</a>
+        <div class="help-popup" id="helpPopup">
+          <div class="help-popup-header">
+            <div class="help-popup-title">
+              <span class="help-popup-icon">💡</span>
+              <span>How to use the To-Do Plan workflow</span>
+            </div>
+            <button type="button" class="help-popup-close" id="closeHelpBtn" aria-label="Close help">&times;</button>
+          </div>
+          <div class="help-popup-body">
+            <ol class="help-steps">
+              <li>
+                <span class="step-num">1</span>
+                <span class="step-text">Click <strong>Load Project from Folder</strong> and pick your project's folder on disk (or load a saved project JSON instead).</span>
+              </li>
+              <li>
+                <span class="step-num">2</span>
+                <span class="step-text">Describe the big task, click <strong>Generate Plan Prompt</strong>, and paste it into ChatGPT / Claude / Gemini. It will reply with a JSON to-do list — no code yet.</span>
+              </li>
+              <li>
+                <span class="step-num">3</span>
+                <span class="step-text">Paste that JSON into <strong>Load Plan</strong>. Each step appears as a checklist item with its own <strong>Copy Step Prompt</strong> button, pre-loaded with the plan, progress so far, and the relevant files' current content.</span>
+              </li>
+              <li>
+                <span class="step-num">4</span>
+                <span class="step-text">Paste a step's prompt into a fresh AI chat, get back code, then use the Sync Prompt + change list below to apply it to your project. Tick the step's checkbox once it's done.</span>
+              </li>
+              <li>
+                <span class="step-num">5</span>
+                <span class="step-text">Repeat for each step — later step prompts automatically include whatever earlier steps changed.</span>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <div class="mode-badge">
+        ✅ Update Your Project — To-Do Plan
+      </div>
+      <div class="top-nav-right"></div>
+    </div>
+
+    <div class="hero">
+      <div class="title-wrap">
+        <h1>ScaffoldAI</h1>
+        <p>
+          For big tasks that touch many files, ask the AI to plan first: it breaks your task into an ordered
+          to-do list, and ScaffoldAI turns each item into a complete, self-contained prompt — with full context
+          and the right files attached — ready to paste into any AI conversation, one step at a time.
+        </p>
+      </div>
+      <div class="badge">Single-file HTML • No backend • Plan-then-execute AI workflow</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>1) Load Your Project</h2>
+        <div class="pill">Folder / JSON → Editors → Export</div>
+      </div>
+      <div class="card-body">
+        <p class="muted">
+          Choose how you'd like to bring your existing project into ScaffoldAI.
+        </p>
+
+        <div class="load-options">
+          <div class="load-option-btn" id="importFromFolderBtn">
+            <span class="lo-icon">📥</span>
+            <span>Load Project from Folder</span>
+            <span class="lo-sub">Reads a real folder on your PC and fills in every file's code automatically.</span>
+          </div>
+          <div class="load-option-btn" id="loadProjectBtn">
+            <span class="lo-icon">📂</span>
+            <span>Load Saved Project JSON</span>
+            <span class="lo-sub">Restore a project you previously exported from ScaffoldAI as JSON.</span>
+          </div>
+        </div>
+        <input id="projectLoader" type="file" accept=".json" class="hidden" />
+
+        <div class="btn-row">
+          <button class="btn-danger" id="resetBtn">🗑 Reset All</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Project</div>
+            <div class="value" id="statProject">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Files</div>
+            <div class="value" id="statFiles">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Folders</div>
+            <div class="value" id="statFolders">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-header">
+        <h2>2) Break Your Task Into a To-Do Plan</h2>
+        <div class="pill">Describe → Generate Plan Prompt → Paste Plan Back</div>
+      </div>
+      <div class="card-body">
+        <p class="muted">
+          Describe the full task, however large. ScaffoldAI generates a prompt asking the AI to plan the work as a
+          JSON to-do list — <strong>no code yet</strong> — broken into small steps small enough to implement one at a
+          time. Paste the AI's plan JSON back in below and ScaffoldAI will turn every step into a ready-to-copy prompt.
+        </p>
+
+        <div class="field">
+          <label for="planTaskInput">Describe the overall task</label>
+          <textarea id="planTaskInput" rows="4" placeholder="e.g. Add user authentication with signup, login, password reset, and protected routes throughout the app."></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-success" id="generatePlanPromptBtn">🧭 Generate Plan Prompt</button>
+          <button class="btn-dark" id="copyPlanPromptBtn">📋 Copy Plan Prompt</button>
+          <button class="btn-danger" id="resetPlanBtn">🗑 Clear Plan</button>
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <label>Generated Plan Prompt Preview</label>
+          <div id="planPromptBox" class="prompt-box">Describe your task and click "Generate Plan Prompt".</div>
+        </div>
+
+        <div class="field" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <label for="planJsonInput">Paste the AI's plan JSON here</label>
+          <div class="small" style="margin-bottom:8px">
+            The AI's reply to the plan prompt should be pure JSON — no code, just the ordered to-do list.
+          </div>
+          <textarea id="planJsonInput" rows="8" placeholder='Paste the plan JSON here...'></textarea>
+          <div class="btn-row">
+            <button class="btn-primary" id="loadPlanBtn">📝 Load Plan</button>
+          </div>
+        </div>
+
+        <div id="planContainer" class="field hidden" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <label>Your To-Do List</label>
+          <div class="plan-progress-wrap">
+            <div class="plan-progress-bar"><div class="plan-progress-bar-fill" id="planProgressBarFill"></div></div>
+            <div class="plan-progress-text" id="planProgressText">0 / 0 steps completed</div>
+          </div>
+          <div class="small" style="margin-bottom:12px">
+            Copy a step's prompt, paste it into a fresh AI chat, get back code, apply it using the Sync Prompt +
+            change list below, then tick the step's checkbox. Later step prompts automatically include what earlier
+            steps changed.
+          </div>
+          <div id="planStepsList" class="plan-steps-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-header">
+        <h2>3) Apply a Step's Changes to Your Project</h2>
+        <div class="pill">Sync Prompt → Paste Change List → Apply</div>
+      </div>
+      <div class="card-body">
+        <p class="muted">
+          After the AI answers a step's prompt with code, send it the Sync Prompt below so it returns a structured
+          JSON list of exactly which files it created, edited, or deleted for that step — paste that back here,
+          then paste in the code for each file to apply the step to your project.
+        </p>
+
+        <div class="field">
+          <label>Sync Prompt (send this after the AI answers a step)</label>
+          <div id="syncPromptBox" class="prompt-box"></div>
+          <div class="btn-row">
+            <button class="btn-primary" id="copySyncPromptBtn">📋 Copy Sync Prompt</button>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <label for="aiChangesJsonInput">Paste the AI's change list (paths only, no code yet)</label>
+          <div class="small" style="margin-bottom:8px">
+            This JSON only says which files were created, edited, or deleted — no code in it. Load it, then paste
+            each file's code manually into the boxes that appear below.
+          </div>
+          <textarea id="aiChangesJsonInput" rows="8" placeholder='Paste the JSON change list here...'></textarea>
+          <div class="btn-row">
+            <button class="btn-dark" id="loadChangeListBtn">📝 Load Change List</button>
+          </div>
+        </div>
+
+        <div id="changeListContainer" class="field hidden" style="margin-top:16px">
+          <label>Paste the code for each file</label>
+          <div id="changeListItems" class="change-list"></div>
+        </div>
+
+        <div class="field" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <div class="toolbar" style="margin-bottom:10px">
+            <span id="syncFolderStatusPill" class="folder-pill hidden"></span>
+            <button class="btn-dark" id="linkSyncFolderBtn">🔗 Link PC Folder for Direct Sync</button>
+          </div>
+          <div class="small" style="margin-bottom:10px">
+            If you link the project's folder on your PC (or loaded it earlier via "Load Project from Folder"),
+            applying changes writes them straight to those files on disk — no need to download the whole project again.
+          </div>
+          <div class="btn-row">
+            <button class="btn-success" id="applyChangesBtn">✅ Apply Changes to Project</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-header">
+        <h2>4) Project Workspace</h2>
+        <div class="toolbar">
+          <span id="folderStatusPill" class="folder-pill hidden"></span>
+          <button class="btn-dark" id="saveProjectBtn">💾 Export Project JSON</button>
+          <button class="btn-warning" id="downloadZipBtn">🧷 Download ZIP</button>
+          <button class="btn-success" id="saveToFolderBtn">📁 Save to Folder</button>
+          <button class="btn-primary" id="pushChangesBtn">🔄 Apply Changes to Folder</button>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="small" style="margin-bottom:10px">
+          <strong>Apply Changes to Folder</strong> writes back only the files you've created, edited, or
+          deleted since the last sync — no full re-download needed.
+        </div>
+        <div id="workspaceEmpty" class="empty-state">
+          <div>
+            <h3 style="margin-top:0;color:#e5e7eb">No project loaded yet</h3>
+            <div>
+              Use <strong>Load Project from Folder</strong> or <strong>Load Saved Project JSON</strong> above.
+              ScaffoldAI will create the full project tree and an editor for every file.
+            </div>
+          </div>
+        </div>
+
+        <div id="workspace" class="workspace hidden">
+          <div class="tree-panel">
+            <h3 class="section-title">Project Tree</h3>
+            <div class="small" style="margin-bottom:10px">
+              Click any file to open its editor. Hover a folder or file to reveal its ✕ delete button.
+            </div>
+
+            <div class="btn-row" style="margin-top:0">
+              <button class="btn-success" id="newFileBtn">📄+ New File</button>
+              <button class="btn-dark" id="newFolderBtn">📁+ New Folder</button>
+            </div>
+
+            <div class="search-box">
+              <input id="fileSearch" type="text" placeholder="Search file path..." />
+              <button class="btn-dark" id="clearSearchBtn">Clear</button>
+            </div>
+
+            <div class="tree-wrap" style="margin-top:14px">
+              <ul id="treeRoot" class="tree"></ul>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="editor-top">
+              <div>
+                <div class="small">Selected file</div>
+                <div id="editorFile" class="editor-file">No file selected</div>
+              </div>
+              <div class="editor-actions">
+                <button class="btn-dark" id="copyFileContentBtn">📋 Copy File Content</button>
+                <button class="btn-dark" id="clearFileBtn">🧹 Clear File</button>
+              </div>
+            </div>
+
+            <div class="editor-box" id="editorContainer">
+              <div class="empty-state" style="min-height:520px">
+                Select a file from the tree to view or edit its content.
+              </div>
+            </div>
+
+            <div class="small">
+              Tip: file contents here are exactly what gets attached to each step's prompt above.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="todo_project.js"></script>
+</body>
+</html>

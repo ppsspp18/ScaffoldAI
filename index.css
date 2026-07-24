@@ -54,12 +54,16 @@ body{
 
 .option-grid{
   display:grid;
-  grid-template-columns:repeat(2,1fr);
+  grid-template-columns:repeat(3,1fr);
   gap:24px;
-  width:min(920px,94%);
+  width:min(1280px,96%);
 }
 
-@media (max-width:760px){
+@media (max-width:980px){
+  .option-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+@media (max-width:640px){
   .option-grid{grid-template-columns:1fr}
 }
 
@@ -125,4 +129,13 @@ body{
 
 .option-card.new .option-cta{
   color:#86efac;
+}
+
+.option-card.plan .option-icon{
+  background:rgba(245,158,11,.12);
+  border:1px solid rgba(245,158,11,.35);
+}
+
+.option-card.plan .option-cta{
+  color:#fcd34d;
 }

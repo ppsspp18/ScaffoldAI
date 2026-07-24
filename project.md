@@ -11,14 +11,19 @@ index.html  (landing page)
 │   ├── create_project.js       # Page-specific UI logic
 │   ├── create_project.css      # Page styles
 │   └── app.js                  # Shared core engine
-└── update_project/
-    ├── update_project.html     # Page HTML
-    ├── update_project.js       # Page-specific UI logic
-    ├── update_project.css      # Page styles
+├── update_project/
+│   ├── update_project.html     # Page HTML
+│   ├── update_project.js       # Page-specific UI logic
+│   ├── update_project.css      # Page styles
+│   └── app.js                  # Shared core engine (duplicated)
+└── todo_project/
+    ├── todo_project.html       # Page HTML
+    ├── todo_project.js         # Page-specific UI logic
+    ├── todo_project.css        # Page styles (extends update_project.css)
     └── app.js                  # Shared core engine (duplicated)
 ```
 
-`app.js` is the entire business logic — duplicated identically in both directories. It handles everything: data model, tree rendering, editor, JSON validation, ZIP generation, File System Access API, AI prompt generation, export/import, and manual file/folder creation & deletion.
+`app.js` is the entire business logic — duplicated identically in all three directories. It handles everything: data model, tree rendering, editor, JSON validation, ZIP generation, File System Access API, AI prompt generation, export/import, manual file/folder creation & deletion, and the To-Do Plan feature.
 
 ## Data Model
 
@@ -43,6 +48,8 @@ In-memory state is held in globals:
 - `selectedFilePath` — currently open file
 - `savedDirHandle` / `linkedProjectDirHandle` — File System Access API directory handles
 - `lastSyncedSnapshot` — clone of `fileContents` used for incremental sync diffing
+- `planData` — the loaded to-do plan (`{ planTitle, steps: [{ id, title, description, files }] }`), only used on the To-Do Plan page
+- `completedStepIds` — a `Set` of step `id`s the user has checked off, used both for the progress bar and to mark steps `[DONE]` in later step prompts
 
 ## Key Workflows
 
@@ -70,6 +77,24 @@ In-memory state is held in globals:
 
 Both the manual create/delete flow and the AI-driven apply flow funnel through a shared `rebuildWorkspaceView()` helper, which re-renders the tree, stats, file-select list, and editor from the current `projectData` / `fileContents` state.
 
+### Update Your Project — To-Do Plan
+
+A dedicated page (`todo_project.html`) for tasks too large for a single AI response — e.g. "add authentication across the whole app." It reuses the same Load Project / Project Workspace / Apply Changes machinery as Update Your Project, but replaces the freeform "Ask AI About Your Project" question with a **plan-then-execute** flow:
+
+1. **Generate Plan Prompt** (`generatePlanPromptFlow()` → `buildPlanPrompt()`) — the user describes the overall task; ScaffoldAI builds a prompt (embedding the project structure) instructing the AI to **not write code yet**, but instead return an ordered, JSON-structured to-do list, where each step is small enough to implement in one response and lists the exact files it touches. The user copies this prompt into any AI chat.
+2. **Load Plan** (`loadPlanFlow()` → `validatePlanData()`) — the user pastes the AI's JSON reply back in. It's validated against the schema `{ planTitle, steps: [{ id, title, description, files }] }` and rendered as a checklist (`renderPlan()`).
+3. **Per-step prompts** (`buildStepPrompt()` / `copyStepPrompt()`) — each checklist item has a "Copy Step Prompt" button. The generated prompt is fully self-contained so it can be pasted into a **brand-new** AI conversation with no prior context, and includes:
+   - The full plan, with each step marked `[THIS STEP]`, `[DONE]`, or `[NOT DONE YET]`
+   - A summary of steps already completed
+   - The project structure
+   - This step's own title/description
+   - The **current, live content** of every file this step lists — which automatically reflects any edits made while completing earlier steps, since it's read straight from `fileContents` at copy time (no separate "previous step output" tracking needed)
+   - The same "always output full file content, never diffs" instructions used elsewhere
+4. **Apply the step's changes** — same Sync Prompt → paste change list → paste code → "Apply Changes to Project" flow as Update Your Project, so the resulting code actually lands in the workspace and on disk.
+5. **Track progress** — each checklist item has a checkbox (`completedStepIds`); checking it off updates the progress bar (`updatePlanProgress()`) and causes that step to show as `[DONE]` (with its description as completed-so-far context) in every subsequent step's prompt.
+
+`resetPlanUI()` clears the plan whenever the project itself is reset, rebuilt, or reloaded (called alongside `resetAskAiUI()` in all four of those code paths), so a stale plan never survives a project swap.
+
 ## Manual File & Folder Management
 
 Present only on the Update Your Project page (`update_project.html`), gated in `app.js` by the presence of the `newFileBtn` / `newFolderBtn` elements (`enableTreeManagement`), so `create_project.html` is unaffected:
@@ -81,9 +106,11 @@ Present only on the Update Your Project page (`update_project.html`), gated in `
 
 ## AI Prompts
 
-Two hardcoded prompts in `app.js`:
+Two hardcoded prompts in `app.js`, plus two dynamically-built ones for the To-Do Plan workflow:
 - **SCAFFOLD_PROMPT** — instructs AI to return only a JSON project structure (used in Create workflow)
-- **SYNC_PROMPT** — instructs AI to return a JSON list of created/edited/deleted files (used in Update workflow)
+- **SYNC_PROMPT** — instructs AI to return a JSON list of created/edited/deleted files (used in Update and To-Do Plan workflows)
+- **Plan prompt** (`buildPlanPrompt()`) — built per-task, not hardcoded, since it embeds the live project structure and the user's task description; instructs the AI to return a JSON to-do list instead of code (To-Do Plan workflow)
+- **Step prompt** (`buildStepPrompt()`) — built per-step, embedding the full plan, completed-so-far context, project structure, and the live content of that step's files (To-Do Plan workflow)
 
 ## File System Access API
 
@@ -108,4 +135,4 @@ JSZip (v3.10.1, loaded from CDN) builds a ZIP by recursively walking the project
 
 ## CSS Architecture
 
-Dark theme (`#0f172a` base, `#38bdf8` accent) using CSS custom properties. Responsive grid layout for the tree + editor workspace. No CSS framework. `update_project.css` additionally includes the `.load-options` grid and `.node-delete-btn` hover styling used only on the Update Your Project page.
+Dark theme (`#0f172a` base, `#38bdf8` accent) using CSS custom properties. Responsive grid layout for the tree + editor workspace. No CSS framework. `update_project.css` and `todo_project.css` additionally include the `.load-options` grid and `.node-delete-btn` hover styling. `todo_project.css` further extends `update_project.css` with `.plan-*` classes for the checklist, progress bar, and per-step file chips.
