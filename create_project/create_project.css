@@ -289,6 +289,30 @@ label{
 .node-name{
   word-break:break-word;
   font-size:.94rem;
+  flex-grow:1;
+}
+
+.node-delete-btn{
+  flex-shrink:0;
+  border:none;
+  background:transparent;
+  color:var(--muted);
+  font-size:.85rem;
+  padding:2px 7px;
+  border-radius:8px;
+  cursor:pointer;
+  opacity:0;
+  transition:.15s ease;
+}
+
+.tree-node:hover .node-delete-btn{
+  opacity:1;
+}
+
+.node-delete-btn:hover{
+  background:rgba(239,68,68,.16);
+  color:#fca5a5;
+  transform:none;
 }
 
 .editor-panel{

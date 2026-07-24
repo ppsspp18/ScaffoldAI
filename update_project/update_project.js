@@ -1,10 +1,11 @@
 /* ---------------------------------------------------------------------
  * update_project.js
  * Page-specific behavior for update_project.html (Update Your Project).
- * Shared workspace/editor/Ask-AI logic lives in app.js — this file only
- * adds small conveniences specific to the "load an existing project"
- * workflow (loading from a local folder or a previously saved project
- * JSON, instead of pasting a scaffold JSON).
+ * Shared workspace/editor/Ask-AI logic (including the New File / New
+ * Folder / delete-node manual management flows) lives in app.js — this
+ * file only adds small conveniences specific to the "load an existing
+ * project" workflow (loading from a local folder or a previously saved
+ * project JSON, instead of pasting a scaffold JSON).
  * ------------------------------------------------------------------- */
 
 document.addEventListener("DOMContentLoaded", () => {

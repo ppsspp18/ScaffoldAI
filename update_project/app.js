@@ -129,6 +129,13 @@ const folderStatusPill = document.getElementById("folderStatusPill");
 const fileSearch = document.getElementById("fileSearch");
 const clearSearchBtn = document.getElementById("clearSearchBtn");
 
+// New File / New Folder controls — only present on update_project.html.
+// Looked up defensively (same pattern as everything else in this file) so
+// this shared script still runs unmodified on create_project.html.
+const newFileBtn = document.getElementById("newFileBtn");
+const newFolderBtn = document.getElementById("newFolderBtn");
+const enableTreeManagement = !!(newFileBtn || newFolderBtn);
+
 const fileSelectList = document.getElementById("fileSelectList");
 const aiQuestion = document.getElementById("aiQuestion");
 const generatePromptBtn = document.getElementById("generatePromptBtn");
@@ -377,6 +384,20 @@ function buildTree(nodes, parentEl, basePath=""){
     name.textContent = node.name;
 
     nodeDiv.append(icon, name);
+
+    if(enableTreeManagement){
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "node-delete-btn";
+      delBtn.title = node.type === "folder" ? "Delete this folder" : "Delete this file";
+      delBtn.textContent = "✕";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteNodeFlow(currentPath, node.type);
+      });
+      nodeDiv.appendChild(delBtn);
+    }
+
     li.appendChild(nodeDiv);
 
     if(node.type === "file"){
@@ -873,6 +894,26 @@ function getPathParts(path){
   return path.split("/").map(p => p.trim()).filter(Boolean);
 }
 
+function findNodeByPath(structure, pathParts){
+  let currentArr = structure;
+  let node = null;
+  for(let i = 0; i < pathParts.length; i++){
+    node = currentArr.find(n => n.name === pathParts[i]);
+    if(!node) return null;
+    currentArr = node.children || [];
+  }
+  return node;
+}
+
+function collectFileDescendants(node, currentPath){
+  if(node.type === "file") return [currentPath];
+  let paths = [];
+  (node.children || []).forEach(child => {
+    paths = paths.concat(collectFileDescendants(child, `${currentPath}/${child.name}`));
+  });
+  return paths;
+}
+
 function insertFileIntoStructure(structure, pathParts){
   let currentArr = structure;
 
@@ -891,6 +932,21 @@ function insertFileIntoStructure(structure, pathParts){
   const existingFile = currentArr.find(n => n.type === "file" && n.name === fileName);
   if(!existingFile){
     currentArr.push({ type: "file", name: fileName });
+  }
+}
+
+function insertFolderIntoStructure(structure, pathParts){
+  let currentArr = structure;
+
+  for(let i = 0; i < pathParts.length; i++){
+    const folderName = pathParts[i];
+    let folderNode = currentArr.find(n => n.type === "folder" && n.name === folderName);
+    if(!folderNode){
+      folderNode = { type: "folder", name: folderName, children: [] };
+      currentArr.push(folderNode);
+    }
+    if(!folderNode.children) folderNode.children = [];
+    currentArr = folderNode.children;
   }
 }
 
@@ -916,6 +972,14 @@ async function getDirHandleForParentPath(rootHandle, pathParts, { create=false }
   return current;
 }
 
+async function ensureDirPathOnDisk(rootHandle, pathParts){
+  let current = rootHandle;
+  for(let i = 0; i < pathParts.length; i++){
+    current = await current.getDirectoryHandle(pathParts[i], { create: true });
+  }
+  return current;
+}
+
 async function writeFileToDisk(rootHandle, path, content){
   const parts = getPathParts(path);
   const fileName = parts[parts.length - 1];
@@ -932,6 +996,17 @@ async function deleteFileFromDisk(rootHandle, path){
   try{
     const parentHandle = await getDirHandleForParentPath(rootHandle, parts, { create: false });
     await parentHandle.removeEntry(fileName);
+  }catch(err){
+    if(err && err.name !== "NotFoundError") throw err;
+  }
+}
+
+async function deleteEntryFromDisk(rootHandle, path, isFolder){
+  const parts = getPathParts(path);
+  const entryName = parts[parts.length - 1];
+  try{
+    const parentHandle = await getDirHandleForParentPath(rootHandle, parts, { create: false });
+    await parentHandle.removeEntry(entryName, { recursive: isFolder });
   }catch(err){
     if(err && err.name !== "NotFoundError") throw err;
   }
@@ -1073,26 +1148,7 @@ async function applyAIChanges(){
     }
   });
 
-  fileList = [];
-  treeRoot.innerHTML = "";
-  const { files, folders } = collectFilesAndFolders(projectData.structure);
-  buildTree(projectData.structure, treeRoot);
-  updateStats(files, folders);
-  renderFileSelectList();
-
-  if(selectedFilePath && Object.prototype.hasOwnProperty.call(fileContents, selectedFilePath)){
-    editorFile.textContent = selectedFilePath;
-    renderEditor(selectedFilePath);
-  }else{
-    selectedFilePath = null;
-    editorFile.textContent = "No file selected";
-    editorContainer.innerHTML = `
-      <div class="empty-state" style="min-height:520px">
-        Select a file from the tree to paste its code or text content.
-      </div>
-    `;
-  }
-  refreshTreeActiveState();
+  rebuildWorkspaceView();
 
   let diskSynced = false;
   let diskError = null;
@@ -1133,6 +1189,160 @@ async function applyAIChanges(){
 }
 
 if(applyChangesBtn) applyChangesBtn.addEventListener("click", applyAIChanges);
+
+/* ---------------------------------------------------------------------
+ * Manual file/folder creation & deletion (Update Your Project only)
+ * ------------------------------------------------------------------- */
+
+// Re-renders the tree, stats, file-select list, and editor from the
+// current projectData/fileContents state. Shared by the AI-apply flow
+// and the manual create/delete flow below.
+function rebuildWorkspaceView(){
+  fileList = [];
+  treeRoot.innerHTML = "";
+  const { files, folders } = collectFilesAndFolders(projectData.structure);
+  buildTree(projectData.structure, treeRoot);
+  updateStats(files, folders);
+  renderFileSelectList();
+
+  if(selectedFilePath && Object.prototype.hasOwnProperty.call(fileContents, selectedFilePath)){
+    editorFile.textContent = selectedFilePath;
+    renderEditor(selectedFilePath);
+  }else{
+    selectedFilePath = null;
+    editorFile.textContent = "No file selected";
+    editorContainer.innerHTML = `
+      <div class="empty-state" style="min-height:520px">
+        Select a file from the tree to view or edit its content.
+      </div>
+    `;
+  }
+  refreshTreeActiveState();
+}
+
+async function createNewFileFlow(){
+  if(!projectData){
+    showToast("Load a project first");
+    return;
+  }
+
+  const input = prompt("Enter the path for the new file (e.g. src/utils/helpers.js):");
+  if(!input) return;
+  const parts = getPathParts(input);
+  if(!parts.length){
+    showToast("Invalid path");
+    return;
+  }
+
+  if(findNodeByPath(projectData.structure, parts)){
+    showToast("A file or folder already exists at that path");
+    return;
+  }
+
+  syncCurrentEditorToMemory();
+  insertFileIntoStructure(projectData.structure, parts);
+  fileContents[input] = "";
+
+  if(linkedProjectDirHandle){
+    const ok = await ensureWritePermission(linkedProjectDirHandle);
+    if(ok){
+      try{
+        await writeFileToDisk(linkedProjectDirHandle, input, "");
+        lastSyncedSnapshot = { ...fileContents };
+      }catch(err){
+        showToast("Created in ScaffoldAI, but failed to write to disk: " + (err.message || err));
+      }
+    }
+  }
+
+  selectedFilePath = input;
+  rebuildWorkspaceView();
+  showToast(`Created file "${input}"`);
+}
+
+async function createNewFolderFlow(){
+  if(!projectData){
+    showToast("Load a project first");
+    return;
+  }
+
+  const input = prompt("Enter the path for the new folder (e.g. src/components):");
+  if(!input) return;
+  const parts = getPathParts(input);
+  if(!parts.length){
+    showToast("Invalid path");
+    return;
+  }
+
+  if(findNodeByPath(projectData.structure, parts)){
+    showToast("A file or folder already exists at that path");
+    return;
+  }
+
+  syncCurrentEditorToMemory();
+  insertFolderIntoStructure(projectData.structure, parts);
+
+  if(linkedProjectDirHandle){
+    const ok = await ensureWritePermission(linkedProjectDirHandle);
+    if(ok){
+      try{
+        await ensureDirPathOnDisk(linkedProjectDirHandle, parts);
+      }catch(err){
+        showToast("Created in ScaffoldAI, but failed to create it on disk: " + (err.message || err));
+      }
+    }
+  }
+
+  rebuildWorkspaceView();
+  showToast(`Created folder "${input}"`);
+}
+
+async function deleteNodeFlow(path, type){
+  if(!projectData) return;
+
+  const label = type === "folder" ? "folder (and everything inside it)" : "file";
+  if(!confirm(`Delete the ${label} "${path}"? This cannot be undone.`)) return;
+
+  const parts = getPathParts(path);
+  const node = findNodeByPath(projectData.structure, parts);
+  if(!node) return;
+
+  syncCurrentEditorToMemory();
+
+  const affectedFilePaths = collectFileDescendants(node, path);
+  removeNodeFromStructure(projectData.structure, parts);
+  affectedFilePaths.forEach(p => {
+    delete fileContents[p];
+    if(selectedFilePath === p) selectedFilePath = null;
+  });
+
+  let diskError = null;
+  if(linkedProjectDirHandle){
+    const ok = await ensureWritePermission(linkedProjectDirHandle);
+    if(ok){
+      try{
+        await deleteEntryFromDisk(linkedProjectDirHandle, path, type === "folder");
+        lastSyncedSnapshot = { ...fileContents };
+      }catch(err){
+        diskError = err;
+      }
+    }else{
+      linkedProjectDirHandle = null;
+      updateSyncFolderStatusPill();
+    }
+  }
+
+  rebuildWorkspaceView();
+
+  if(diskError){
+    showToast(`Deleted "${path}" in ScaffoldAI, but failed to remove it from disk: ${diskError.message || diskError}`);
+  }else{
+    showToast(`Deleted "${path}"`);
+  }
+}
+
+if(newFileBtn) newFileBtn.addEventListener("click", createNewFileFlow);
+if(newFolderBtn) newFolderBtn.addEventListener("click", createNewFolderFlow);
 
 const EXCLUDED_DIR_NAMES = new Set([
   ".git", "node_modules", "__pycache__", ".venv", "venv",
