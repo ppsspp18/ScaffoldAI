@@ -29,7 +29,7 @@
             <ol class="help-steps">
               <li>
                 <span class="step-num">1</span>
-                <span class="step-text">Click <strong>Load Project from Folder</strong> and pick your project's folder on disk (or load a saved project JSON instead).</span>
+                <span class="step-text">Click <strong>Load Project from Folder</strong> and pick your project's folder on disk.</span>
               </li>
               <li>
                 <span class="step-num">2</span>
@@ -57,8 +57,8 @@
       <div class="title-wrap">
         <h1>ScaffoldAI</h1>
         <p>
-          Load an existing project straight from your PC, or restore a previously saved ScaffoldAI project JSON.
-          ScaffoldAI will rebuild the full folder/file tree with every file's code already filled in, so you can
+          Load an existing project straight from your PC. ScaffoldAI will rebuild the full folder/file tree
+          with every file's code already filled in, so you can
           keep editing, add or remove files and folders, ask AI for changes, and sync everything back to disk.
         </p>
       </div>
@@ -68,7 +68,7 @@
     <div class="card">
       <div class="card-header">
         <h2>1) Load Your Project</h2>
-        <div class="pill">Folder / JSON → Editors → Export</div>
+        <div class="pill">Folder → Editors → Export</div>
       </div>
       <div class="card-body">
         <p class="muted">
@@ -81,13 +81,7 @@
             <span>Load Project from Folder</span>
             <span class="lo-sub">Reads a real folder on your PC and fills in every file's code automatically.</span>
           </div>
-          <div class="load-option-btn" id="loadProjectBtn">
-            <span class="lo-icon">📂</span>
-            <span>Load Saved Project JSON</span>
-            <span class="lo-sub">Restore a project you previously exported from ScaffoldAI as JSON.</span>
-          </div>
         </div>
-        <input id="projectLoader" type="file" accept=".json" class="hidden" />
 
         <div class="btn-row">
           <button class="btn-danger" id="resetBtn">🗑 Reset All</button>
@@ -219,7 +213,7 @@
           <div>
             <h3 style="margin-top:0;color:#e5e7eb">No project loaded yet</h3>
             <div>
-              Use <strong>Load Project from Folder</strong> or <strong>Load Saved Project JSON</strong> above.
+              Use <strong>Load Project from Folder</strong> above.
               ScaffoldAI will create the full project tree and an editor for every file.
             </div>
           </div>
