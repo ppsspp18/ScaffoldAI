@@ -121,8 +121,14 @@
 
         <div class="field">
           <label>Select files to attach as context</label>
-          <div id="fileSelectList" class="file-select-list">
-            <div class="small">Load a project first to select files.</div>
+          <div class="small" style="margin-bottom:8px">
+            Tick files or whole folders below. This mirrors your Project Tree, so it's easy to see what you're
+            sending as context.
+          </div>
+          <div class="file-select-tree-wrap">
+            <ul id="fileSelectList" class="tree file-select-tree">
+              <li><div class="small">Load a project first to select files.</div></li>
+            </ul>
           </div>
         </div>
 

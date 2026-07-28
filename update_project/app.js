@@ -344,25 +344,80 @@ function renderFileSelectList(){
   if(!fileSelectList) return;
   fileSelectList.innerHTML = "";
 
-  if(!fileList.length){
-    fileSelectList.innerHTML = `<div class="small">Build a scaffold first to select files.</div>`;
+  if(!projectData || !fileList.length){
+    fileSelectList.innerHTML = `<li><div class="small">Build a scaffold first to select files.</div></li>`;
     return;
   }
 
-  fileList.forEach(f => {
+  // Preserve whatever was checked before this re-render (e.g. after editing files).
+  const previouslyChecked = new Set(
+    Array.from(fileSelectList.querySelectorAll(".file-select-checkbox:checked")).map(cb => cb.dataset.path)
+  );
+
+  buildFileSelectTree(projectData.structure, fileSelectList, "", previouslyChecked);
+  refreshFolderSelectStates();
+}
+
+// Builds a checkbox tree mirroring the Project Tree, so picking AI context
+// files feels like browsing the same structure instead of a flat file list.
+function buildFileSelectTree(nodes, parentEl, basePath, checkedPaths){
+  nodes.forEach(node => {
+    const li = document.createElement("li");
+    const currentPath = basePath ? `${basePath}/${node.name}` : node.name;
+
     const row = document.createElement("label");
-    row.className = "file-select-item";
+    row.className = `tree-node file-select-node ${node.type}`;
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
-    cb.className = "file-select-checkbox";
-    cb.dataset.path = f.path;
+    cb.className = node.type === "folder" ? "file-select-folder-checkbox" : "file-select-checkbox";
+    cb.dataset.path = currentPath;
+    if(node.type === "file" && checkedPaths.has(currentPath)) cb.checked = true;
 
-    const span = document.createElement("span");
-    span.textContent = f.path;
+    const icon = document.createElement("span");
+    icon.className = "icon";
+    icon.textContent = node.type === "folder" ? "📁" : "📄";
 
-    row.append(cb, span);
-    fileSelectList.appendChild(row);
+    const name = document.createElement("span");
+    name.className = "node-name";
+    name.textContent = node.name;
+
+    row.append(cb, icon, name);
+    li.appendChild(row);
+
+    if(node.type === "folder"){
+      cb.addEventListener("change", () => {
+        const childChecks = li.querySelectorAll(".file-select-checkbox");
+        childChecks.forEach(c => { c.checked = cb.checked; });
+        refreshFolderSelectStates();
+      });
+
+      const childrenUl = document.createElement("ul");
+      childrenUl.className = "tree-children";
+      buildFileSelectTree(node.children || [], childrenUl, currentPath, checkedPaths);
+      li.appendChild(childrenUl);
+    }else{
+      cb.addEventListener("change", refreshFolderSelectStates);
+    }
+
+    parentEl.appendChild(li);
+  });
+}
+
+// Keeps each folder checkbox in sync with (and indeterminate between) its files' checked state.
+function refreshFolderSelectStates(){
+  if(!fileSelectList) return;
+  fileSelectList.querySelectorAll(".file-select-folder-checkbox").forEach(folderCb => {
+    const li = folderCb.closest("li");
+    const fileChecks = Array.from(li.querySelectorAll(".file-select-checkbox"));
+    if(!fileChecks.length){
+      folderCb.checked = false;
+      folderCb.indeterminate = false;
+      return;
+    }
+    const checkedCount = fileChecks.filter(c => c.checked).length;
+    folderCb.checked = checkedCount === fileChecks.length;
+    folderCb.indeterminate = checkedCount > 0 && checkedCount < fileChecks.length;
   });
 }
 
@@ -708,6 +763,7 @@ function generateAIPrompt(){
     const cb = fileSelectList.querySelector(`.file-select-checkbox[data-path="${CSS.escape(path)}"]`);
     if(cb) cb.checked = true;
   });
+  refreshFolderSelectStates();
 
   let prompt = `I'm working on a project called "${projectData.projectName}".\n\n`;
   prompt += `Project structure:\n${buildStructureText(projectData.structure)}\n`;

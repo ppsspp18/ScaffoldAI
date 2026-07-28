@@ -567,6 +567,31 @@ label{
   accent-color:var(--accent);
 }
 
+.file-select-tree-wrap{
+  max-height:260px;
+  overflow:auto;
+  border:1px solid #253247;
+  background:#0b1220;
+  border-radius:14px;
+  padding:10px 12px;
+}
+
+.file-select-tree{
+  font-family:Consolas, monospace;
+}
+
+.file-select-node{
+  cursor:pointer;
+}
+
+.file-select-node input[type="checkbox"]{
+  width:16px;
+  height:16px;
+  flex-shrink:0;
+  accent-color:var(--accent);
+  margin:0;
+}
+
 .folder-pill{
   display:inline-flex;
   align-items:center;
